@@ -2,7 +2,7 @@
 
 _Made by fer_
 
-A [Hack The Box](https://www.hackthebox.com/) profile badge generator for your GitHub README, styled like the official TryHackMe badge: avatar, rank, points, boxes pwned, global ranking and streak - as a clean SVG card in HTB's green/black look.
+A [Hack The Box](https://www.hackthebox.com/) profile badge generator for your GitHub README, styled like the official TryHackMe badge: avatar, rank, points, boxes pwned, global ranking and followers - as a clean SVG card in HTB's green/black look.
 
 HTB doesn't offer an official stats badge anymore (the old `hackthebox.eu/badge/...` signature system is defunct), so this script builds one from the real HTB API instead.
 
@@ -24,12 +24,12 @@ _(example above uses placeholder data - run the script to generate your own)_
 
 ## Usage
 
-Run with either your HTB username or your full profile URL:
+Run with your full profile URL (recommended - see the known issue below) or your HTB username:
 
 ```bash
-python htb_badge.py fer
-# or
 python htb_badge.py https://app.hackthebox.com/profile/123456
+# or
+python htb_badge.py fer
 ```
 
 If `HTB_APP_TOKEN` isn't set in your environment, the script will prompt you to paste it (input is hidden, and it's never written to shell history). To skip the prompt instead:
@@ -72,9 +72,12 @@ git commit -m "Update HTB badge"
 git push
 ```
 
+## Known issue
+
+Username lookup (`python htb_badge.py fer`) currently fails with a `422` error from HTB's search endpoint - the exact parameters it expects haven't been confirmed yet. **Use your full profile URL instead** (`python htb_badge.py https://app.hackthebox.com/profile/<id>`), which doesn't depend on that endpoint at all and is confirmed working. Run with `--debug` if you want to help pin down the search endpoint's expected format - it now prints the response body on API errors.
+
 ## Notes
 
-- The username lookup uses HTB's search API and falls back with a clear error if it can't resolve a name - if that happens, pass your full profile URL instead (most reliable, no lookup needed).
-- The avatar is downloaded and embedded directly into the SVG (not hotlinked), so the badge renders correctly on GitHub even if HTB's CDN blocks external image proxies. If the download fails for any reason, a placeholder icon is shown instead of a broken image.
-- HTB doesn't have a documented public "streak" stat the way TryHackMe does. The script looks for a few likely field names and shows `N/A` if none are found - run with `--debug` to check whether your profile response actually has one, so it can be wired up correctly.
+- The avatar is downloaded and embedded directly into the SVG (not hotlinked) using a separate, unauthenticated request - so the badge renders correctly on GitHub, and HTB's own API token is never sent to the third-party host serving the image. If the download fails for any reason, a placeholder icon is shown instead of a broken image.
+- HTB doesn't have a "streak" stat the way TryHackMe does (confirmed via `--debug` against a real profile) - the badge shows **followers** instead, which HTB does track.
 - This uses HTB's undocumented v4 API (reverse-engineered by the community, see [Gubarz/unofficial-htb-api](https://github.com/Gubarz/unofficial-htb-api)), not an officially supported integration. If HTB changes their response format, the script prints a warning about which fields it couldn't find rather than failing silently.

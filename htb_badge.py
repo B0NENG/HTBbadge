@@ -47,7 +47,12 @@ def api_get(session, path, params=None, debug_label=None):
             "HTB rejected the request (401 Unauthorized). "
             "Check that HTB_APP_TOKEN is valid and hasn't expired."
         )
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError:
+        if DEBUG:
+            print(f"[debug] {resp.status_code} response body: {resp.text[:2000]}", file=sys.stderr)
+        raise
     data = resp.json()
     if debug_label:
         debug_save(debug_label, data)
@@ -117,14 +122,22 @@ def normalize_avatar(avatar):
     return SITE_BASE + avatar
 
 
-def fetch_avatar_data_uri(session, avatar_url):
+def fetch_avatar_data_uri(avatar_url):
     """Download the avatar and embed it as a data URI so the badge doesn't
     depend on GitHub being able to hotlink an external HTB image at render
-    time (HTB's CDN may reject requests from GitHub's image proxy)."""
+    time (HTB's CDN may reject requests from GitHub's image proxy).
+
+    Uses a plain, unauthenticated request rather than the HTB API session:
+    avatars are served from a separate host (e.g. an S3 bucket), and
+    forwarding the HTB Authorization header there gets rejected with a
+    400 Bad Request instead of just being ignored."""
     if not avatar_url:
         return None
     try:
-        resp = session.get(avatar_url, timeout=15)
+        resp = requests.get(
+            avatar_url, timeout=15,
+            headers={"User-Agent": "htb-badge-generator (github.com/b0neng/htbbadge)"},
+        )
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "image/png").split(";")[0].strip()
         if not content_type.startswith("image/"):
@@ -162,7 +175,7 @@ def fetch_profile(session, user_id):
         "ranking": pick(profile, "ranking", "rank_position", default=None),
         "user_owns": int(pick(profile, "user_owns", "userOwns", default=0) or 0),
         "system_owns": int(pick(profile, "system_owns", "systemOwns", default=0) or 0),
-        "streak": pick(profile, "streak", "current_streak", "login_streak", "streak_days", default=None),
+        "followers": int(pick(profile, "followed_by_count", "followers_count", "followers", default=0) or 0),
         "avatar": normalize_avatar(pick(profile, "avatar", "avatar_thumb")),
     }
 
@@ -171,7 +184,7 @@ def fetch_profile(session, user_id):
 ICON_STAR = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
 ICON_FLAG = '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'
 ICON_TREND = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
-ICON_CLOCK = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'
+ICON_FOLLOWERS = '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
 
 AVATAR_FALLBACK = (
     '<rect x="20" y="40" width="70" height="70" fill="#2d3746" clip-path="url(#avatarClip)"/>'
@@ -204,8 +217,6 @@ def build_svg(data, avatar_data_uri=None):
     boxes_pwned = data["user_owns"] + data["system_owns"]
     ranking = data["ranking"]
     ranking_display = f"#{ranking:,}" if isinstance(ranking, int) else "N/A"
-    streak = data["streak"]
-    streak_display = f"{streak}d" if isinstance(streak, (int, float)) else "N/A"
 
     # Lay out stat columns left-to-right, sizing each column to its own
     # content so large numbers (or long labels) never collide with the
@@ -214,7 +225,7 @@ def build_svg(data, avatar_data_uri=None):
         (ICON_STAR, f'{data["points"]:,}', "Points"),
         (ICON_FLAG, str(boxes_pwned), "Pwned"),
         (ICON_TREND, ranking_display, "Rank"),
-        (ICON_CLOCK, streak_display, "Streak"),
+        (ICON_FOLLOWERS, f'{data["followers"]:,}', "Followers"),
     ]
     stats_parts = []
     x = 130
@@ -332,7 +343,7 @@ def main():
 
     user_id = resolve_target(session, args.target)
     profile = fetch_profile(session, user_id)
-    avatar_data_uri = fetch_avatar_data_uri(session, profile["avatar"])
+    avatar_data_uri = fetch_avatar_data_uri(profile["avatar"])
     svg = build_svg(profile, avatar_data_uri)
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
