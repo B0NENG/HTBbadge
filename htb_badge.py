@@ -2,17 +2,21 @@
 """Generate a TryHackMe-style profile badge (SVG) from Hack The Box stats.
 
 Usage:
-    export HTB_APP_TOKEN=...
     python htb_badge.py <htb-username-or-profile-url>
 
 Requires a free HTB "App Token" (create one on app.hackthebox.com under
 account settings -> App Tokens). HTB's v4 API requires authentication even
-to read another user's public profile.
+to read another user's public profile. Set it via the HTB_APP_TOKEN
+environment variable, or the script will prompt for it (hidden input).
 """
 
 import argparse
+import base64
+import getpass
+import json
 import os
 import re
+import subprocess
 import sys
 from xml.sax.saxutils import escape
 
@@ -22,17 +26,32 @@ API_BASE = "https://labs.hackthebox.com/api/v4"
 SITE_BASE = "https://www.hackthebox.com"
 PROFILE_URL_RE = re.compile(r"hackthebox\.(?:com|eu)/(?:profile|users)/(\d+)")
 CREDIT = "Made by fer"
+DEBUG_FILE = "debug_response.json"
+
+DEBUG = False
+_debug_data = {}
 
 
-def api_get(session, path, params=None):
+def debug_save(label, data):
+    if not DEBUG:
+        return
+    _debug_data[label] = data
+    with open(DEBUG_FILE, "w", encoding="utf-8") as f:
+        json.dump(_debug_data, f, indent=2)
+
+
+def api_get(session, path, params=None, debug_label=None):
     resp = session.get(f"{API_BASE}{path}", params=params, timeout=15)
     if resp.status_code == 401:
         raise SystemExit(
-            "HTB avviste forespørselen (401 Unauthorized). "
-            "Sjekk at HTB_APP_TOKEN er gyldig og ikke utløpt."
+            "HTB rejected the request (401 Unauthorized). "
+            "Check that HTB_APP_TOKEN is valid and hasn't expired."
         )
     resp.raise_for_status()
-    return resp.json()
+    data = resp.json()
+    if debug_label:
+        debug_save(debug_label, data)
+    return data
 
 
 def _iter_dicts(obj):
@@ -46,7 +65,11 @@ def _iter_dicts(obj):
 
 
 def resolve_username_to_id(session, username):
-    data = api_get(session, "/search/fetch", params={"query": username, "tags[]": "users"})
+    data = api_get(
+        session, "/search/fetch",
+        params={"query": username, "tags[]": "users"},
+        debug_label="search_fetch",
+    )
     name_keys = ("name", "value", "text", "username")
 
     matches = [
@@ -63,10 +86,10 @@ def resolve_username_to_id(session, username):
 
     if not matches:
         raise SystemExit(
-            f"Kunne ikke slå opp bruker-ID for '{username}' automatisk "
-            "(HTBs søke-API kan ha endret svarformat siden dette scriptet ble skrevet). "
-            "Prøv i stedet å oppgi hele profil-lenken din, f.eks. "
-            "https://app.hackthebox.com/profile/123456"
+            f"Could not automatically resolve a user ID for '{username}' "
+            "(HTB's search API may have changed its response format since this "
+            "script was written). Try passing your full profile URL instead, "
+            "e.g. https://app.hackthebox.com/profile/123456"
         )
     return int(matches[0]["id"])
 
@@ -88,15 +111,37 @@ def pick(d, *names, default=None):
 
 def normalize_avatar(avatar):
     if not avatar:
-        return f"{SITE_BASE}/images/default-avatar.svg"
+        return None
     if avatar.startswith("http"):
         return avatar
     return SITE_BASE + avatar
 
 
+def fetch_avatar_data_uri(session, avatar_url):
+    """Download the avatar and embed it as a data URI so the badge doesn't
+    depend on GitHub being able to hotlink an external HTB image at render
+    time (HTB's CDN may reject requests from GitHub's image proxy)."""
+    if not avatar_url:
+        return None
+    try:
+        resp = session.get(avatar_url, timeout=15)
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "image/png").split(";")[0].strip()
+        if not content_type.startswith("image/"):
+            content_type = "image/png"
+        encoded = base64.b64encode(resp.content).decode("ascii")
+        return f"data:{content_type};base64,{encoded}"
+    except requests.RequestException as e:
+        print(f"Warning: could not download avatar ({e}). Using a placeholder icon instead.", file=sys.stderr)
+        return None
+
+
 def fetch_profile(session, user_id):
-    data = api_get(session, f"/user/profile/basic/{user_id}")
+    data = api_get(session, f"/user/profile/basic/{user_id}", debug_label="profile_basic")
     profile = data.get("profile", data)
+
+    if DEBUG:
+        print(f"[debug] profile keys: {sorted(profile.keys())}", file=sys.stderr)
 
     missing = [
         key for key in ("name", "points", "user_owns", "system_owns")
@@ -104,8 +149,9 @@ def fetch_profile(session, user_id):
     ]
     if missing:
         print(
-            f"Advarsel: feltene {missing} ble ikke funnet i HTB-responsen. "
-            "HTB kan ha endret API-formatet - badgen vil bruke 0/ukjent for disse.",
+            f"Warning: fields {missing} were not found in the HTB response. "
+            "HTB may have changed its API format - the badge will show 0/unknown for these. "
+            "Re-run with --debug to inspect the raw response.",
             file=sys.stderr,
         )
 
@@ -116,7 +162,7 @@ def fetch_profile(session, user_id):
         "ranking": pick(profile, "ranking", "rank_position", default=None),
         "user_owns": int(pick(profile, "user_owns", "userOwns", default=0) or 0),
         "system_owns": int(pick(profile, "system_owns", "systemOwns", default=0) or 0),
-        "respects": int(pick(profile, "respects", "respect", default=0) or 0),
+        "streak": pick(profile, "streak", "current_streak", "login_streak", "streak_days", default=None),
         "avatar": normalize_avatar(pick(profile, "avatar", "avatar_thumb")),
     }
 
@@ -125,7 +171,13 @@ def fetch_profile(session, user_id):
 ICON_STAR = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
 ICON_FLAG = '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'
 ICON_TREND = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
-ICON_USERS = '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
+ICON_CLOCK = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'
+
+AVATAR_FALLBACK = (
+    '<rect x="20" y="40" width="70" height="70" fill="#2d3746" clip-path="url(#avatarClip)"/>'
+    '<circle cx="55" cy="67" r="14" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
+    '<circle cx="55" cy="115" r="26" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
+)
 
 
 def icon(path_data, x, y, size=16):
@@ -146,12 +198,14 @@ def stat_column(x, icon_svg, value, label):
     </g>"""
 
 
-def build_svg(data):
+def build_svg(data, avatar_data_uri=None):
     name = escape(str(data["name"]))
     rank = escape(str(data["rank"]))
     boxes_pwned = data["user_owns"] + data["system_owns"]
     ranking = data["ranking"]
     ranking_display = f"#{ranking:,}" if isinstance(ranking, int) else "N/A"
+    streak = data["streak"]
+    streak_display = f"{streak}d" if isinstance(streak, (int, float)) else "N/A"
 
     # Lay out stat columns left-to-right, sizing each column to its own
     # content so large numbers (or long labels) never collide with the
@@ -160,7 +214,7 @@ def build_svg(data):
         (ICON_STAR, f'{data["points"]:,}', "Points"),
         (ICON_FLAG, str(boxes_pwned), "Pwned"),
         (ICON_TREND, ranking_display, "Rank"),
-        (ICON_USERS, f'{data["respects"]:,}', "Respect"),
+        (ICON_CLOCK, streak_display, "Streak"),
     ]
     stats_parts = []
     x = 130
@@ -174,6 +228,12 @@ def build_svg(data):
     header_end_x = 130 + len(name) * 11.5 + 12 + (len(rank) * 7.5 + 16) + 12
     width = max(460, int(stats_end_x) + 20, int(header_end_x) + 20)
     height = 170
+
+    avatar_svg = (
+        f'<image href="{escape(avatar_data_uri)}" x="20" y="40" width="70" height="70" '
+        f'clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>'
+        if avatar_data_uri else AVATAR_FALLBACK
+    )
 
     return f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" role="img" aria-label="Hack The Box profile badge for {name}">
   <title>Hack The Box profile badge for {name}</title>
@@ -194,7 +254,7 @@ def build_svg(data):
   <rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" rx="14" fill="url(#hex)"/>
 
   <circle cx="55" cy="75" r="37" fill="none" stroke="#9FEF00" stroke-width="2"/>
-  <image href="{escape(data['avatar'])}" x="20" y="40" width="70" height="70" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>
+  {avatar_svg}
 
   <text x="130" y="50" font-family="Verdana, sans-serif" font-size="20" font-weight="bold" fill="#e6edf3">{name}</text>
   <g transform="translate({130 + len(name) * 11.5 + 12},36)">
@@ -212,19 +272,56 @@ def build_svg(data):
 """
 
 
+def get_repo_info():
+    """Best-effort: resolve the current git remote + branch so we can print
+    a ready-to-use raw.githubusercontent.com embed URL. Returns None if this
+    isn't a GitHub git repo (e.g. run outside a clone)."""
+    try:
+        remote = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        match = re.search(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?$", remote)
+        if match and branch and branch != "HEAD":
+            return match.group(1), match.group(2), branch
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return None
+
+
+def get_token():
+    token = os.environ.get("HTB_APP_TOKEN")
+    if token:
+        return token
+    token = getpass.getpass("HTB_APP_TOKEN is not set. Paste your HTB App Token (input hidden): ").strip()
+    if not token:
+        raise SystemExit(
+            "No token provided. Create a free App Token at app.hackthebox.com "
+            "(account settings -> App Tokens), then either set it as an "
+            "environment variable (export HTB_APP_TOKEN=...) or paste it when prompted."
+        )
+    return token
+
+
 def main():
+    global DEBUG
+
     parser = argparse.ArgumentParser(description="Generate an HTB profile badge (SVG).")
     parser.add_argument("target", help="HTB username or profile URL (e.g. https://app.hackthebox.com/profile/123456)")
     parser.add_argument("-o", "--output", default="assets/htb_badge.svg", help="Output SVG path")
+    parser.add_argument(
+        "--debug", action="store_true",
+        help=f"Dump raw API responses to {DEBUG_FILE} and print the profile's field names, "
+             "useful for spotting HTB field names this script doesn't know about yet.",
+    )
     args = parser.parse_args()
+    DEBUG = args.debug
 
-    token = os.environ.get("HTB_APP_TOKEN")
-    if not token:
-        raise SystemExit(
-            "Mangler HTB_APP_TOKEN. Opprett et gratis App Token på app.hackthebox.com "
-            "(kontoinnstillinger -> App Tokens) og sett det som miljøvariabel:\n"
-            "  export HTB_APP_TOKEN=...\n"
-        )
+    token = get_token()
 
     session = requests.Session()
     session.headers.update({
@@ -235,14 +332,27 @@ def main():
 
     user_id = resolve_target(session, args.target)
     profile = fetch_profile(session, user_id)
-    svg = build_svg(profile)
+    avatar_data_uri = fetch_avatar_data_uri(session, profile["avatar"])
+    svg = build_svg(profile, avatar_data_uri)
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(svg)
 
-    print(f"Badge skrevet til {args.output} for bruker '{profile['name']}' (id={user_id}).")
-    print(f"Profil-lenke: https://app.hackthebox.com/profile/{user_id}")
+    profile_url = f"https://app.hackthebox.com/profile/{user_id}"
+    print(f"Badge written to {args.output} for user '{profile['name']}' (id={user_id}).")
+    print(f"Profile: {profile_url}")
+    if DEBUG:
+        print(f"Raw API responses saved to {DEBUG_FILE}")
+
+    repo_info = get_repo_info()
+    print("\nEmbed in a GitHub README:")
+    if repo_info:
+        owner, repo, branch = repo_info
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{args.output}"
+        print(f"[![HTB Badge]({raw_url})]({profile_url})")
+    else:
+        print(f"[![HTB Badge]({args.output})]({profile_url})")
 
 
 if __name__ == "__main__":
