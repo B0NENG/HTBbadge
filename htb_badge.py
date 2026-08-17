@@ -149,12 +149,27 @@ def fetch_avatar_data_uri(avatar_url):
         return None
 
 
+#  Fields worth showing in --debug output: enough to diagnose stat mapping
+# (rank/level naming, points, owns, followers) without printing PII the
+# profile response also contains (full_name, phone_number, timezone, ...).
+SAFE_DEBUG_FIELDS = (
+    "name", "rank", "rank_id", "next_rank", "next_rank_points",
+    "current_rank_progress", "points", "ranking", "user_owns",
+    "system_owns", "followed_by_count",
+)
+
+
 def fetch_profile(session, user_id):
     data = api_get(session, f"/user/profile/basic/{user_id}", debug_label="profile_basic")
     profile = data.get("profile", data)
 
     if DEBUG:
         print(f"[debug] profile keys: {sorted(profile.keys())}", file=sys.stderr)
+        safe_values = {k: profile[k] for k in SAFE_DEBUG_FIELDS if k in profile}
+        print(f"[debug] known field values: {safe_values}", file=sys.stderr)
+        level_like = {k: v for k, v in profile.items() if "level" in k.lower() or "xp" in k.lower()}
+        if level_like:
+            print(f"[debug] possible level/XP fields: {level_like}", file=sys.stderr)
 
     missing = [
         key for key in ("name", "points", "user_owns", "system_owns")
@@ -175,7 +190,7 @@ def fetch_profile(session, user_id):
         "ranking": pick(profile, "ranking", "rank_position", default=None),
         "user_owns": int(pick(profile, "user_owns", "userOwns", default=0) or 0),
         "system_owns": int(pick(profile, "system_owns", "systemOwns", default=0) or 0),
-        "followers": int(pick(profile, "followed_by_count", "followers_count", "followers", default=0) or 0),
+        "level": pick(profile, "level", "user_level", "current_level", "xp_level", default=None),
         "avatar": normalize_avatar(pick(profile, "avatar", "avatar_thumb")),
     }
 
@@ -184,7 +199,7 @@ def fetch_profile(session, user_id):
 ICON_STAR = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
 ICON_FLAG = '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'
 ICON_TREND = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
-ICON_FOLLOWERS = '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
+ICON_LEVEL = '<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>'
 
 AVATAR_FALLBACK = (
     '<rect x="20" y="40" width="70" height="70" fill="#2d3746" clip-path="url(#avatarClip)"/>'
@@ -214,9 +229,15 @@ def stat_column(x, icon_svg, value, label):
 def build_svg(data, avatar_data_uri=None):
     name = escape(str(data["name"]))
     rank = escape(str(data["rank"]))
-    boxes_pwned = data["user_owns"] + data["system_owns"]
+    # A machine only counts as "pwned" once both flags are captured, so
+    # this is min() rather than a sum of the two flag counts (confirmed
+    # against a real profile: user_owns=5, system_owns=4 -> 4 machines
+    # fully owned, matching HTB's own "Machines" counter).
+    boxes_pwned = min(data["user_owns"], data["system_owns"])
     ranking = data["ranking"]
     ranking_display = f"#{ranking:,}" if isinstance(ranking, int) else "N/A"
+    level = data["level"]
+    level_display = f"Lvl {level}" if isinstance(level, (int, float)) else "N/A"
 
     # Lay out stat columns left-to-right, sizing each column to its own
     # content so large numbers (or long labels) never collide with the
@@ -225,7 +246,7 @@ def build_svg(data, avatar_data_uri=None):
         (ICON_STAR, f'{data["points"]:,}', "Points"),
         (ICON_FLAG, str(boxes_pwned), "Pwned"),
         (ICON_TREND, ranking_display, "Rank"),
-        (ICON_FOLLOWERS, f'{data["followers"]:,}', "Followers"),
+        (ICON_LEVEL, level_display, "Level"),
     ]
     stats_parts = []
     x = 130
