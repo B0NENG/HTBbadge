@@ -304,6 +304,51 @@ def build_svg(data, avatar_data_uri=None):
 """
 
 
+LEVEL_ENDPOINT_CANDIDATES = (
+    "/user/profile/activity/{id}",
+    "/season/user/profile/{id}",
+    "/user/profile/season/{id}",
+    "/user/profile/graph/activity/{id}",
+    "/user/profile/chart/{id}",
+)
+
+
+def probe_level_endpoints(session, user_id):
+    """--debug only: HTB's newer Level/XP system (shown on the profile page
+    as e.g. "Apprentice, Lvl 18") isn't present anywhere in
+    /user/profile/basic - it's a different system from the rank/rank_id
+    fields that endpoint returns (the classic Noob/Script Kiddie/.../
+    Omniscient ranks). Try a handful of plausible endpoints for it and
+    report what's actually there, since this can't be verified without
+    a live, authenticated HTB session."""
+    print("\n[debug] probing candidate endpoints for level/XP data...", file=sys.stderr)
+    for template in LEVEL_ENDPOINT_CANDIDATES:
+        path = template.format(id=user_id)
+        try:
+            resp = session.get(f"{API_BASE}{path}", timeout=15)
+        except requests.RequestException as e:
+            print(f"[debug] probe {path}: error ({e})", file=sys.stderr)
+            continue
+
+        print(f"[debug] probe {path}: {resp.status_code}", file=sys.stderr)
+        if resp.status_code != 200:
+            continue
+        try:
+            data = resp.json()
+        except ValueError:
+            continue
+
+        debug_save(f"probe:{path}", data)
+        if isinstance(data, dict):
+            print(f"[debug]   keys: {sorted(data.keys())}", file=sys.stderr)
+        level_like = {
+            k: v for d in _iter_dicts(data) for k, v in d.items()
+            if "level" in k.lower() or "xp" in k.lower()
+        }
+        if level_like:
+            print(f"[debug]   possible level/XP fields: {level_like}", file=sys.stderr)
+
+
 def get_repo_info():
     """Best-effort: resolve the current git remote + branch so we can print
     a ready-to-use raw.githubusercontent.com embed URL. Returns None if this
@@ -375,7 +420,8 @@ def main():
     print(f"Badge written to {args.output} for user '{profile['name']}' (id={user_id}).")
     print(f"Profile: {profile_url}")
     if DEBUG:
-        print(f"Raw API responses saved to {DEBUG_FILE}")
+        probe_level_endpoints(session, user_id)
+        print(f"\nRaw API responses saved to {DEBUG_FILE}")
 
     repo_info = get_repo_info()
     print("\nEmbed in a GitHub README:")

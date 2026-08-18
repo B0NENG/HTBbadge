@@ -61,6 +61,8 @@ python htb_badge.py fer --debug
 
 This prints every field name found in your profile response, the values of the fields this script actually uses (name, rank, points, owns, ranking - deliberately excluding personal fields like your full name, phone number, or timezone that HTB's response also includes), and saves the full raw API response to `debug_response.json` (gitignored, never committed). Share the printed values (not necessarily the full file) if you need a field mapping fixed.
 
+It also probes a handful of other likely endpoints for HTB's newer Level/XP data (currently not found anywhere in the main profile response - the `rank`/`rank_id` fields there are HTB's older Noob/Script Kiddie/.../Omniscient system, a separate thing from the Apprentice/Level tiers shown on the profile page) and reports which ones exist and what they contain, so that stat can be wired up once a working field is found. A 404 on any of these is expected and harmless.
+
 ## Updating the badge
 
 There's no auto-update in this version. When you've pwned more boxes, just re-run the script and commit the new `assets/htb_badge.svg`:
