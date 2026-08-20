@@ -23,7 +23,9 @@ from xml.sax.saxutils import escape
 import requests
 
 API_BASE = "https://labs.hackthebox.com/api/v4"
+EXPERIENCE_API_BASE = "https://labs.hackthebox.com/api/experience/v1"
 SITE_BASE = "https://www.hackthebox.com"
+ROMAN_GRADE = {"1": "I", "2": "II", "3": "III"}
 PROFILE_URL_RE = re.compile(r"hackthebox\.(?:com|eu)/(?:profile|users)/(\d+)")
 CREDIT = "Made by fer"
 DEBUG_FILE = "debug_response.json"
@@ -190,8 +192,43 @@ def fetch_profile(session, user_id):
         "ranking": pick(profile, "ranking", "rank_position", default=None),
         "user_owns": int(pick(profile, "user_owns", "userOwns", default=0) or 0),
         "system_owns": int(pick(profile, "system_owns", "systemOwns", default=0) or 0),
-        "level": pick(profile, "level", "user_level", "current_level", "xp_level", default=None),
+        "account_id": pick(profile, "account_id", default=None),
         "avatar": normalize_avatar(pick(profile, "avatar", "avatar_thumb")),
+    }
+
+
+def fetch_experience(session, account_id):
+    """Level/XP/streak data lives on a completely separate API
+    ("experience", not /api/v4/...) keyed by the account's UUID rather
+    than its numeric user id. That UUID comes from the `account_id`
+    field already present in the basic profile response.
+
+    This is what actually reflects HTB's current Level/Tier system
+    (e.g. "Apprentice I", Lvl 19) - the `rank`/`rank_id` fields from
+    /user/profile/basic belong to HTB's older, separate Noob/Script
+    Kiddie/.../Omniscient ranking and can be stale/misleading by
+    comparison."""
+    if not account_id:
+        return None
+    try:
+        resp = session.get(f"{EXPERIENCE_API_BASE}/account/{account_id}", timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"Warning: could not fetch level/XP data ({e}).", file=sys.stderr)
+        return None
+
+    if DEBUG:
+        debug_save("experience_account", data)
+        print(f"[debug] experience keys: {sorted(data.keys())}", file=sys.stderr)
+
+    streak = data.get("streakData") or {}
+    return {
+        "level": data.get("level"),
+        "level_title": data.get("levelTitle"),
+        "level_grade": data.get("levelGrade"),
+        "total_xp": data.get("totalExperiencePoints"),
+        "streak_weeks": streak.get("counter"),
     }
 
 
@@ -199,7 +236,7 @@ def fetch_profile(session, user_id):
 ICON_STAR = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
 ICON_FLAG = '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'
 ICON_TREND = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
-ICON_LEVEL = '<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>'
+ICON_CLOCK = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'
 
 AVATAR_FALLBACK = (
     '<rect x="20" y="40" width="70" height="70" fill="#2d3746" clip-path="url(#avatarClip)"/>'
@@ -226,9 +263,20 @@ def stat_column(x, icon_svg, value, label):
     </g>"""
 
 
-def build_svg(data, avatar_data_uri=None):
+def build_svg(data, experience=None, avatar_data_uri=None):
+    experience = experience or {}
     name = escape(str(data["name"]))
-    rank = escape(str(data["rank"]))
+
+    # Prefer HTB's current Level/Tier system (e.g. "Apprentice I") over the
+    # older rank field (e.g. "Noob") from /user/profile/basic - the two are
+    # separate systems and the older one can look stale/wrong by comparison.
+    level_title = experience.get("level_title")
+    if level_title:
+        grade = ROMAN_GRADE.get(str(experience.get("level_grade")), "")
+        rank = escape(f"{level_title} {grade}".strip())
+    else:
+        rank = escape(str(data["rank"]))
+
     # A machine only counts as "pwned" once both flags are captured, so
     # this is min() rather than a sum of the two flag counts (confirmed
     # against a real profile: user_owns=5, system_owns=4 -> 4 machines
@@ -236,17 +284,24 @@ def build_svg(data, avatar_data_uri=None):
     boxes_pwned = min(data["user_owns"], data["system_owns"])
     ranking = data["ranking"]
     ranking_display = f"#{ranking:,}" if isinstance(ranking, int) else "N/A"
-    level = data["level"]
-    level_display = f"Lvl {level}" if isinstance(level, (int, float)) else "N/A"
+
+    # Total XP reflects HTB's current system and is what most players
+    # think of as "their points" now; the older `points` field is kept
+    # only as a fallback if the experience API call didn't succeed.
+    total_xp = experience.get("total_xp")
+    points_display = f'{total_xp:,}' if isinstance(total_xp, (int, float)) else f'{data["points"]:,}'
+
+    streak_weeks = experience.get("streak_weeks")
+    streak_display = f"{streak_weeks}w" if isinstance(streak_weeks, (int, float)) else "N/A"
 
     # Lay out stat columns left-to-right, sizing each column to its own
     # content so large numbers (or long labels) never collide with the
     # next column - a fixed pixel step overflows for high point totals.
     columns = [
-        (ICON_STAR, f'{data["points"]:,}', "Points"),
+        (ICON_STAR, points_display, "XP"),
         (ICON_FLAG, str(boxes_pwned), "Pwned"),
         (ICON_TREND, ranking_display, "Rank"),
-        (ICON_LEVEL, level_display, "Level"),
+        (ICON_CLOCK, streak_display, "Streak"),
     ]
     stats_parts = []
     x = 130
@@ -302,51 +357,6 @@ def build_svg(data, avatar_data_uri=None):
   <text x="{width - 24}" y="{height - 16}" text-anchor="end" font-family="Verdana, sans-serif" font-size="10" font-style="italic" fill="#7d8590">{escape(CREDIT)}</text>
 </svg>
 """
-
-
-LEVEL_ENDPOINT_CANDIDATES = (
-    "/user/profile/activity/{id}",
-    "/season/user/profile/{id}",
-    "/user/profile/season/{id}",
-    "/user/profile/graph/activity/{id}",
-    "/user/profile/chart/{id}",
-)
-
-
-def probe_level_endpoints(session, user_id):
-    """--debug only: HTB's newer Level/XP system (shown on the profile page
-    as e.g. "Apprentice, Lvl 18") isn't present anywhere in
-    /user/profile/basic - it's a different system from the rank/rank_id
-    fields that endpoint returns (the classic Noob/Script Kiddie/.../
-    Omniscient ranks). Try a handful of plausible endpoints for it and
-    report what's actually there, since this can't be verified without
-    a live, authenticated HTB session."""
-    print("\n[debug] probing candidate endpoints for level/XP data...", file=sys.stderr)
-    for template in LEVEL_ENDPOINT_CANDIDATES:
-        path = template.format(id=user_id)
-        try:
-            resp = session.get(f"{API_BASE}{path}", timeout=15)
-        except requests.RequestException as e:
-            print(f"[debug] probe {path}: error ({e})", file=sys.stderr)
-            continue
-
-        print(f"[debug] probe {path}: {resp.status_code}", file=sys.stderr)
-        if resp.status_code != 200:
-            continue
-        try:
-            data = resp.json()
-        except ValueError:
-            continue
-
-        debug_save(f"probe:{path}", data)
-        if isinstance(data, dict):
-            print(f"[debug]   keys: {sorted(data.keys())}", file=sys.stderr)
-        level_like = {
-            k: v for d in _iter_dicts(data) for k, v in d.items()
-            if "level" in k.lower() or "xp" in k.lower()
-        }
-        if level_like:
-            print(f"[debug]   possible level/XP fields: {level_like}", file=sys.stderr)
 
 
 def get_repo_info():
@@ -409,8 +419,9 @@ def main():
 
     user_id = resolve_target(session, args.target)
     profile = fetch_profile(session, user_id)
+    experience = fetch_experience(session, profile["account_id"])
     avatar_data_uri = fetch_avatar_data_uri(profile["avatar"])
-    svg = build_svg(profile, avatar_data_uri)
+    svg = build_svg(profile, experience, avatar_data_uri)
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
@@ -420,7 +431,6 @@ def main():
     print(f"Badge written to {args.output} for user '{profile['name']}' (id={user_id}).")
     print(f"Profile: {profile_url}")
     if DEBUG:
-        probe_level_endpoints(session, user_id)
         print(f"\nRaw API responses saved to {DEBUG_FILE}")
 
     repo_info = get_repo_info()

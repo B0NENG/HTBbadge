@@ -2,7 +2,7 @@
 
 _Made by fer_
 
-A [Hack The Box](https://www.hackthebox.com/) profile badge generator for your GitHub README, styled like the official TryHackMe badge: avatar, rank, points, boxes pwned, global ranking and level - as a clean SVG card in HTB's green/black look.
+A [Hack The Box](https://www.hackthebox.com/) profile badge generator for your GitHub README, styled like the official TryHackMe badge: avatar, current level/tier, XP, boxes pwned, global ranking and weekly streak - as a clean SVG card in HTB's green/black look.
 
 HTB doesn't offer an official stats badge anymore (the old `hackthebox.eu/badge/...` signature system is defunct), so this script builds one from the real HTB API instead.
 
@@ -61,7 +61,7 @@ python htb_badge.py fer --debug
 
 This prints every field name found in your profile response, the values of the fields this script actually uses (name, rank, points, owns, ranking - deliberately excluding personal fields like your full name, phone number, or timezone that HTB's response also includes), and saves the full raw API response to `debug_response.json` (gitignored, never committed). Share the printed values (not necessarily the full file) if you need a field mapping fixed.
 
-It also probes a handful of other likely endpoints for HTB's newer Level/XP data (currently not found anywhere in the main profile response - the `rank`/`rank_id` fields there are HTB's older Noob/Script Kiddie/.../Omniscient system, a separate thing from the Apprentice/Level tiers shown on the profile page) and reports which ones exist and what they contain, so that stat can be wired up once a working field is found. A 404 on any of these is expected and harmless.
+**A note if you ever need to inspect HTB's API yourself via browser DevTools:** never paste the `Headers` section of a request into anything - it includes your live `Authorization` bearer token. Use the `Response` tab (or right-click a request -> Copy -> Copy Response) instead.
 
 ## Updating the badge
 
@@ -82,6 +82,6 @@ Username lookup (`python htb_badge.py fer`) currently fails with a `422` error f
 
 - The avatar is downloaded and embedded directly into the SVG (not hotlinked) using a separate, unauthenticated request - so the badge renders correctly on GitHub, and HTB's own API token is never sent to the third-party host serving the image. If the download fails for any reason, a placeholder icon is shown instead of a broken image.
 - "Pwned" counts machines where you have **both** flags (`min(user_owns, system_owns)`), matching the "Machines" counter on your HTB profile - not the sum of user + root flags separately.
-- HTB doesn't have a "streak" stat the way TryHackMe does (confirmed via `--debug` against a real profile).
-- The **rank tag** shown next to your name comes straight from HTB's `rank` field, which may lag behind the newer level/tier system shown on your profile page (e.g. it can say "Noob" when your profile shows "Apprentice"). The **Level** stat has the same caveat - HTB's API doesn't expose an obvious `level` field yet, so it may show `N/A` until the right field is identified (run with `--debug` and check the `possible level/XP fields` line, or share the printed field values so this can be fixed precisely).
-- This uses HTB's undocumented v4 API (reverse-engineered by the community, see [Gubarz/unofficial-htb-api](https://github.com/Gubarz/unofficial-htb-api)), not an officially supported integration. If HTB changes their response format, the script prints a warning about which fields it couldn't find rather than failing silently.
+- The **rank tag** (e.g. "Apprentice I") and the **XP** and **Streak** stats come from a separate HTB API - `labs.hackthebox.com/api/experience/v1/account/{account_id}` - not the same `/api/v4/...` endpoint everything else uses. This is HTB's current Level/Tier system. The older `/user/profile/basic` endpoint has its own `rank` field too (e.g. "Noob"), but that's a different, older ranking system (Noob -> Script Kiddie -> Hacker -> ... -> Omniscient) that can look stale by comparison - it's only used as a fallback if the experience API call fails.
+- A week counts toward the **Streak** once you've earned more than 200 XP in it; the current (incomplete) week isn't counted until it's over.
+- This uses HTB's undocumented v4 and experience APIs (reverse-engineered by the community and via browser DevTools), not an officially supported integration. If HTB changes their response format, the script prints a warning about which fields it couldn't find rather than failing silently.
