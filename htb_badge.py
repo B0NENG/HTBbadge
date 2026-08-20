@@ -238,10 +238,16 @@ ICON_LEVEL = '<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12
 ICON_FLAME = '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'
 
 AVATAR_FALLBACK = (
-    '<rect x="20" y="40" width="70" height="70" fill="#2d3746" clip-path="url(#avatarClip)"/>'
-    '<circle cx="55" cy="67" r="14" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
-    '<circle cx="55" cy="115" r="26" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
+    '<rect x="5" y="17" width="54" height="54" fill="#2d3746" clip-path="url(#avatarClip)"/>'
+    '<circle cx="32" cy="32" r="11" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
+    '<circle cx="32" cy="66" r="20" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
 )
+
+# Fixed to match the TryHackMe badge's own dimensions exactly (329x88px PNG,
+# fetched and measured directly), per the user's request for equal sizing.
+CARD_WIDTH = 329
+CARD_HEIGHT = 88
+CONTENT_X = 74
 
 
 def icon(path_data, x, y, size=16, filled=False):
@@ -256,18 +262,25 @@ def icon(path_data, x, y, size=16, filled=False):
     )
 
 
-def stat_column(x, icon_svg, value, label):
+def truncate(text, max_chars):
+    """Fixed-size card = fixed space, unlike the old auto-growing width -
+    long names/values must be clipped rather than pushing the card wider."""
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1] + "…"
+
+
+def stat_column(x, icon_svg, value):
     return f"""
     <g>
       {icon_svg}
-      <text x="{x + 22}" y="{111}" font-family="Verdana, sans-serif" font-size="15" font-weight="bold" fill="#e6edf3">{escape(str(value))}</text>
-      <text x="{x}" y="128" font-family="Verdana, sans-serif" font-size="8" letter-spacing="1" fill="#7d8590">{escape(label.upper())}</text>
+      <text x="{x + 15}" y="{57}" font-family="Verdana, sans-serif" font-size="12" font-weight="bold" fill="#e6edf3">{escape(str(value))}</text>
     </g>"""
 
 
 def build_svg(data, experience=None, avatar_data_uri=None):
     experience = experience or {}
-    name = escape(str(data["name"]))
+    name = escape(truncate(str(data["name"]), 14))
 
     # Prefer HTB's current Level/Tier system (e.g. "Apprentice I") over the
     # older rank field (e.g. "Noob") from /user/profile/basic - the two are
@@ -275,9 +288,10 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     level_title = experience.get("level_title")
     if level_title:
         grade = ROMAN_GRADE.get(str(experience.get("level_grade")), "")
-        rank = escape(f"{level_title} {grade}".strip())
+        rank = f"{level_title} {grade}".strip()
     else:
-        rank = escape(str(data["rank"]))
+        rank = str(data["rank"])
+    rank = escape(truncate(rank, 14))
 
     # A machine only counts as "pwned" once both flags are captured, so
     # this is min() rather than a sum of the two flag counts (confirmed
@@ -293,67 +307,61 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     streak_weeks = experience.get("streak_weeks")
     streak_display = str(streak_weeks) if isinstance(streak_weeks, (int, float)) else "N/A"
 
-    # Lay out stat columns left-to-right, sizing each column to its own
-    # content so large numbers (or long labels) never collide with the
-    # next column - a fixed pixel step overflows for high point totals.
+    # No per-stat labels (POINTS/PWNED/...) - there's no room for them at
+    # this fixed height, so this leans on icon+number pairs only, the same
+    # way TryHackMe's own badge communicates its stats.
     columns = [
-        (ICON_LEVEL, level_display, "Level", False),
-        (ICON_FLAG, str(boxes_pwned), "Pwned", False),
-        (ICON_TREND, ranking_display, "Rank", False),
-        (ICON_FLAME, streak_display, "Streak", True),
+        (ICON_LEVEL, truncate(level_display, 8), False),
+        (ICON_FLAG, truncate(str(boxes_pwned), 8), False),
+        (ICON_TREND, truncate(ranking_display, 8), False),
+        (ICON_FLAME, truncate(streak_display, 8), True),
     ]
     stats_parts = []
-    x = 130
-    for icon_path, value, label, filled in columns:
-        stats_parts.append(stat_column(x, icon(icon_path, x, 96, filled=filled), value, label))
-        col_width = max(len(str(value)) * 9.5, len(label) * 5.5) + 22
-        x += col_width + 18
+    x = CONTENT_X
+    for icon_path, value, filled in columns:
+        stats_parts.append(stat_column(x, icon(icon_path, x, 46, size=12, filled=filled), value))
+        x += max(len(value) * 7, 10) + 24
     stats = "".join(stats_parts)
-    stats_end_x = x
-
-    header_end_x = 130 + len(name) * 11.5 + 12 + (len(rank) * 7.5 + 16) + 12
-    width = max(460, int(stats_end_x) + 20, int(header_end_x) + 20)
-    height = 170
 
     avatar_svg = (
-        f'<image href="{escape(avatar_data_uri)}" x="20" y="40" width="70" height="70" '
+        f'<image href="{escape(avatar_data_uri)}" x="5" y="17" width="54" height="54" '
         f'clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>'
         if avatar_data_uri else AVATAR_FALLBACK
     )
 
-    return f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" role="img" aria-label="Hack The Box profile badge for {name}">
+    return f"""<svg width="{CARD_WIDTH}" height="{CARD_HEIGHT}" viewBox="0 0 {CARD_WIDTH} {CARD_HEIGHT}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" role="img" aria-label="Hack The Box profile badge for {name}">
   <title>Hack The Box profile badge for {name}</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0d1117"/>
       <stop offset="100%" stop-color="#141d2b"/>
     </linearGradient>
-    <pattern id="hex" width="22" height="19" patternUnits="userSpaceOnUse" patternTransform="translate(0,0)">
-      <path d="M11 0 L22 6.3 L22 12.7 L11 19 L0 12.7 L0 6.3 Z" fill="none" stroke="#9FEF00" stroke-opacity="0.06" stroke-width="1"/>
+    <pattern id="hex" width="16" height="14" patternUnits="userSpaceOnUse" patternTransform="translate(0,0)">
+      <path d="M8 0 L16 4.7 L16 9.3 L8 14 L0 9.3 L0 4.7 Z" fill="none" stroke="#9FEF00" stroke-opacity="0.06" stroke-width="1"/>
     </pattern>
     <clipPath id="avatarClip">
-      <circle cx="55" cy="75" r="35"/>
+      <circle cx="32" cy="44" r="27"/>
     </clipPath>
   </defs>
 
-  <rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" rx="14" fill="url(#bg)" stroke="#9FEF00" stroke-opacity="0.55" stroke-width="1.5"/>
-  <rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" rx="14" fill="url(#hex)"/>
+  <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#bg)" stroke="#9FEF00" stroke-opacity="0.55" stroke-width="1.5"/>
+  <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#hex)"/>
 
-  <circle cx="55" cy="75" r="37" fill="none" stroke="#9FEF00" stroke-width="2"/>
+  <circle cx="32" cy="44" r="28" fill="none" stroke="#9FEF00" stroke-width="1.5"/>
   {avatar_svg}
 
-  <text x="130" y="50" font-family="Verdana, sans-serif" font-size="20" font-weight="bold" fill="#e6edf3">{name}</text>
-  <g transform="translate({130 + len(name) * 11.5 + 12},36)">
-    <rect width="{len(rank) * 7.5 + 16}" height="20" rx="10" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
-    <text x="8" y="14" font-family="Verdana, sans-serif" font-size="11" fill="#9FEF00">{rank}</text>
+  <text x="{CONTENT_X}" y="23" font-family="Verdana, sans-serif" font-size="13" font-weight="bold" fill="#e6edf3">{name}</text>
+  <g transform="translate({CONTENT_X + len(name) * 7.2 + 8},13)">
+    <rect width="{len(rank) * 5.2 + 12}" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
+    <text x="6" y="10.5" font-family="Verdana, sans-serif" font-size="8" fill="#9FEF00">{rank}</text>
   </g>
 
-  <line x1="130" y1="68" x2="{width - 24}" y2="68" stroke="#9FEF00" stroke-opacity="0.2" stroke-width="1"/>
+  <line x1="{CONTENT_X}" y1="32" x2="{CARD_WIDTH - 12}" y2="32" stroke="#9FEF00" stroke-opacity="0.2" stroke-width="1"/>
 
   {stats}
 
-  <text x="24" y="{height - 16}" font-family="Verdana, sans-serif" font-size="10" fill="#7d8590">hackthebox.com</text>
-  <text x="{width - 24}" y="{height - 16}" text-anchor="end" font-family="Verdana, sans-serif" font-size="10" font-style="italic" fill="#7d8590">{escape(CREDIT)}</text>
+  <text x="{CONTENT_X}" y="{CARD_HEIGHT - 8}" font-family="Verdana, sans-serif" font-size="7" fill="#7d8590">hackthebox.com</text>
+  <text x="{CARD_WIDTH - 10}" y="{CARD_HEIGHT - 8}" text-anchor="end" font-family="Verdana, sans-serif" font-size="7" font-style="italic" fill="#7d8590">{escape(CREDIT)}</text>
 </svg>
 """
 
