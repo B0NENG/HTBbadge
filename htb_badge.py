@@ -237,6 +237,16 @@ ICON_TREND = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points=
 ICON_LEVEL = '<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>'
 ICON_FLAME = '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'
 
+# Sampled directly from the user's real TryHackMe badge PNG (pixel analysis
+# via Pillow, not a guess) so the stat icons use the same accent colors as
+# their THM badge - trophy/silver, streak/green, badge/magenta, follower/blue.
+ICON_COLOR_LEVEL = "#9CA4B4"
+ICON_COLOR_PWNED = "#A3EA2A"
+ICON_COLOR_RANK = "#D752FF"
+ICON_COLOR_STREAK = "#719CF9"
+
+FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
 AVATAR_FALLBACK = (
     '<rect x="5" y="17" width="54" height="54" fill="#2d3746" clip-path="url(#avatarClip)"/>'
     '<circle cx="32" cy="32" r="11" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
@@ -250,10 +260,10 @@ CARD_HEIGHT = 88
 CONTENT_X = 74
 
 
-def icon(path_data, x, y, size=16, filled=False):
+def icon(path_data, x, y, size=16, color="#9FEF00", filled=False):
     scale = size / 24
-    style = 'fill="#9FEF00" stroke="none"' if filled else (
-        'fill="none" stroke="#9FEF00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+    style = f'fill="{color}" stroke="none"' if filled else (
+        f'fill="none" stroke="{color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
     )
     return (
         f'<g transform="translate({x},{y}) scale({scale})">'
@@ -274,7 +284,7 @@ def stat_column(x, icon_svg, value):
     return f"""
     <g>
       {icon_svg}
-      <text x="{x + 15}" y="{57}" font-family="Verdana, sans-serif" font-size="12" font-weight="bold" fill="#e6edf3">{escape(str(value))}</text>
+      <text x="{x + 16}" y="{57}" font-family="{FONT_STACK}" font-size="12" font-weight="600" fill="#e6edf3">{escape(str(value))}</text>
     </g>"""
 
 
@@ -309,18 +319,19 @@ def build_svg(data, experience=None, avatar_data_uri=None):
 
     # No per-stat labels (POINTS/PWNED/...) - there's no room for them at
     # this fixed height, so this leans on icon+number pairs only, the same
-    # way TryHackMe's own badge communicates its stats.
+    # way TryHackMe's own badge communicates its stats. Icon colors are
+    # sampled from that same THM badge (see ICON_COLOR_* above).
     columns = [
-        (ICON_LEVEL, truncate(level_display, 8), False),
-        (ICON_FLAG, truncate(str(boxes_pwned), 8), False),
-        (ICON_TREND, truncate(ranking_display, 8), False),
-        (ICON_FLAME, truncate(streak_display, 8), True),
+        (ICON_LEVEL, truncate(level_display, 8), ICON_COLOR_LEVEL, False),
+        (ICON_FLAG, truncate(str(boxes_pwned), 8), ICON_COLOR_PWNED, False),
+        (ICON_TREND, truncate(ranking_display, 8), ICON_COLOR_RANK, False),
+        (ICON_FLAME, truncate(streak_display, 8), ICON_COLOR_STREAK, True),
     ]
     stats_parts = []
     x = CONTENT_X
-    for icon_path, value, filled in columns:
-        stats_parts.append(stat_column(x, icon(icon_path, x, 46, size=12, filled=filled), value))
-        x += max(len(value) * 7, 10) + 24
+    for icon_path, value, color, filled in columns:
+        stats_parts.append(stat_column(x, icon(icon_path, x, 45, size=13, color=color, filled=filled), value))
+        x += max(len(value) * 7, 10) + 25
     stats = "".join(stats_parts)
 
     avatar_svg = (
@@ -350,18 +361,18 @@ def build_svg(data, experience=None, avatar_data_uri=None):
   <circle cx="32" cy="44" r="28" fill="none" stroke="#9FEF00" stroke-width="1.5"/>
   {avatar_svg}
 
-  <text x="{CONTENT_X}" y="23" font-family="Verdana, sans-serif" font-size="13" font-weight="bold" fill="#e6edf3">{name}</text>
+  <text x="{CONTENT_X}" y="23" font-family="{FONT_STACK}" font-size="13" font-weight="700" fill="#e6edf3">{name}</text>
   <g transform="translate({CONTENT_X + len(name) * 7.2 + 8},13)">
     <rect width="{len(rank) * 5.2 + 12}" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
-    <text x="6" y="10.5" font-family="Verdana, sans-serif" font-size="8" fill="#9FEF00">{rank}</text>
+    <text x="6" y="10.5" font-family="{FONT_STACK}" font-size="8" font-weight="600" fill="#9FEF00">{rank}</text>
   </g>
 
   <line x1="{CONTENT_X}" y1="32" x2="{CARD_WIDTH - 12}" y2="32" stroke="#9FEF00" stroke-opacity="0.2" stroke-width="1"/>
 
   {stats}
 
-  <text x="{CONTENT_X}" y="{CARD_HEIGHT - 8}" font-family="Verdana, sans-serif" font-size="7" fill="#7d8590">hackthebox.com</text>
-  <text x="{CARD_WIDTH - 10}" y="{CARD_HEIGHT - 8}" text-anchor="end" font-family="Verdana, sans-serif" font-size="7" font-style="italic" fill="#7d8590">{escape(CREDIT)}</text>
+  <text x="{CONTENT_X}" y="{CARD_HEIGHT - 8}" font-family="{FONT_STACK}" font-size="7" fill="#7d8590">hackthebox.com</text>
+  <text x="{CARD_WIDTH - 10}" y="{CARD_HEIGHT - 8}" text-anchor="end" font-family="{FONT_STACK}" font-size="8" font-weight="700" fill="#9FEF00">{escape(CREDIT)}</text>
 </svg>
 """
 
