@@ -20,9 +20,9 @@
   <rect x="5" y="17" width="54" height="54" fill="#2d3746" clip-path="url(#avatarClip)"/><circle cx="32" cy="32" r="11" fill="#6e7f96" clip-path="url(#avatarClip)"/><circle cx="32" cy="66" r="20" fill="#6e7f96" clip-path="url(#avatarClip)"/>
 
   <text x="74" y="23" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e6edf3">fer</text>
-  <g transform="translate(103.6,13)">
+  <g transform="translate(103.6,11.1)">
     <rect width="64.0" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
-    <text x="6" y="10.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="8" font-weight="600" fill="#9FEF00">Skilled II</text>
+    <text x="6" y="9.1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="8" font-weight="600" fill="#9FEF00">Skilled II</text>
   </g>
 
   <line x1="74" y1="32" x2="317" y2="32" stroke="#9FEF00" stroke-opacity="0.2" stroke-width="1"/>

@@ -365,9 +365,9 @@ def build_svg(data, experience=None, avatar_data_uri=None):
   {avatar_svg}
 
   <text x="{CONTENT_X}" y="23" font-family="{FONT_STACK}" font-size="13" font-weight="700" fill="#e6edf3">{name}</text>
-  <g transform="translate({CONTENT_X + len(name) * 7.2 + 8},13)">
+  <g transform="translate({CONTENT_X + len(name) * 7.2 + 8},11.1)">
     <rect width="{len(rank) * 5.2 + 12}" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
-    <text x="6" y="10.5" font-family="{FONT_STACK}" font-size="8" font-weight="600" fill="#9FEF00">{rank}</text>
+    <text x="6" y="9.1" font-family="{FONT_STACK}" font-size="8" font-weight="600" fill="#9FEF00">{rank}</text>
   </g>
 
   <line x1="{CONTENT_X}" y1="32" x2="{CARD_WIDTH - 12}" y2="32" stroke="#9FEF00" stroke-opacity="0.2" stroke-width="1"/>
