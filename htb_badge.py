@@ -174,7 +174,7 @@ def fetch_profile(session, user_id):
             print(f"[debug] possible level/XP fields: {level_like}", file=sys.stderr)
 
     missing = [
-        key for key in ("name", "points", "user_owns", "system_owns")
+        key for key in ("name", "user_owns", "system_owns")
         if pick(profile, key) is None
     ]
     if missing:
@@ -188,7 +188,6 @@ def fetch_profile(session, user_id):
     return {
         "name": pick(profile, "name", "username", default="unknown"),
         "rank": pick(profile, "rank", "rank_name", default="Unranked"),
-        "points": int(pick(profile, "points", default=0) or 0),
         "ranking": pick(profile, "ranking", "rank_position", default=None),
         "user_owns": int(pick(profile, "user_owns", "userOwns", default=0) or 0),
         "system_owns": int(pick(profile, "system_owns", "systemOwns", default=0) or 0),
@@ -233,10 +232,10 @@ def fetch_experience(session, account_id):
 
 
 # Minimal line-icon paths (Feather-icon style, 24x24 viewBox).
-ICON_STAR = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
 ICON_FLAG = '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'
 ICON_TREND = '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
-ICON_CLOCK = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'
+ICON_LEVEL = '<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>'
+ICON_FLAME = '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'
 
 AVATAR_FALLBACK = (
     '<rect x="20" y="40" width="70" height="70" fill="#2d3746" clip-path="url(#avatarClip)"/>'
@@ -245,11 +244,14 @@ AVATAR_FALLBACK = (
 )
 
 
-def icon(path_data, x, y, size=16):
+def icon(path_data, x, y, size=16, filled=False):
     scale = size / 24
+    style = 'fill="#9FEF00" stroke="none"' if filled else (
+        'fill="none" stroke="#9FEF00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+    )
     return (
         f'<g transform="translate({x},{y}) scale({scale})">'
-        f'<g fill="none" stroke="#9FEF00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        f'<g {style}>'
         f'{path_data}</g></g>'
     )
 
@@ -285,28 +287,25 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     ranking = data["ranking"]
     ranking_display = f"#{ranking:,}" if isinstance(ranking, int) else "N/A"
 
-    # Total XP reflects HTB's current system and is what most players
-    # think of as "their points" now; the older `points` field is kept
-    # only as a fallback if the experience API call didn't succeed.
-    total_xp = experience.get("total_xp")
-    points_display = f'{total_xp:,}' if isinstance(total_xp, (int, float)) else f'{data["points"]:,}'
+    level = experience.get("level")
+    level_display = str(level) if isinstance(level, (int, float)) else "N/A"
 
     streak_weeks = experience.get("streak_weeks")
-    streak_display = f"{streak_weeks}w" if isinstance(streak_weeks, (int, float)) else "N/A"
+    streak_display = str(streak_weeks) if isinstance(streak_weeks, (int, float)) else "N/A"
 
     # Lay out stat columns left-to-right, sizing each column to its own
     # content so large numbers (or long labels) never collide with the
     # next column - a fixed pixel step overflows for high point totals.
     columns = [
-        (ICON_STAR, points_display, "XP"),
-        (ICON_FLAG, str(boxes_pwned), "Pwned"),
-        (ICON_TREND, ranking_display, "Rank"),
-        (ICON_CLOCK, streak_display, "Streak"),
+        (ICON_LEVEL, level_display, "Level", False),
+        (ICON_FLAG, str(boxes_pwned), "Pwned", False),
+        (ICON_TREND, ranking_display, "Rank", False),
+        (ICON_FLAME, streak_display, "Streak", True),
     ]
     stats_parts = []
     x = 130
-    for icon_path, value, label in columns:
-        stats_parts.append(stat_column(x, icon(icon_path, x, 96), value, label))
+    for icon_path, value, label, filled in columns:
+        stats_parts.append(stat_column(x, icon(icon_path, x, 96, filled=filled), value, label))
         col_width = max(len(str(value)) * 9.5, len(label) * 5.5) + 22
         x += col_width + 18
     stats = "".join(stats_parts)
