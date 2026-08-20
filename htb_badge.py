@@ -26,7 +26,7 @@ API_BASE = "https://labs.hackthebox.com/api/v4"
 EXPERIENCE_API_BASE = "https://labs.hackthebox.com/api/experience/v1"
 SITE_BASE = "https://www.hackthebox.com"
 ROMAN_GRADE = {"1": "I", "2": "II", "3": "III"}
-PROFILE_URL_RE = re.compile(r"hackthebox\.(?:com|eu)/(?:profile|users)/(\d+)")
+PROFILE_URL_RE = re.compile(r"hackthebox\.(?:com|eu)/(?:profile|public/users|users)/(\d+)")
 CREDIT = "Made by fer"
 DEBUG_FILE = "debug_response.json"
 
@@ -96,7 +96,7 @@ def resolve_username_to_id(session, username):
             f"Could not automatically resolve a user ID for '{username}' "
             "(HTB's search API may have changed its response format since this "
             "script was written). Try passing your full profile URL instead, "
-            "e.g. https://app.hackthebox.com/profile/123456"
+            "e.g. https://app.hackthebox.com/public/users/123456"
         )
     return int(matches[0]["id"])
 
@@ -397,7 +397,7 @@ def main():
     global DEBUG
 
     parser = argparse.ArgumentParser(description="Generate an HTB profile badge (SVG).")
-    parser.add_argument("target", help="HTB username or profile URL (e.g. https://app.hackthebox.com/profile/123456)")
+    parser.add_argument("target", help="HTB username or profile URL (e.g. https://app.hackthebox.com/public/users/123456)")
     parser.add_argument("-o", "--output", default="assets/htb_badge.svg", help="Output SVG path")
     parser.add_argument(
         "--debug", action="store_true",
@@ -426,7 +426,7 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(svg)
 
-    profile_url = f"https://app.hackthebox.com/profile/{user_id}"
+    profile_url = f"https://app.hackthebox.com/public/users/{user_id}"
     print(f"Badge written to {args.output} for user '{profile['name']}' (id={user_id}).")
     print(f"Profile: {profile_url}")
     if DEBUG:

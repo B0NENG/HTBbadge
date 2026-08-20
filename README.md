@@ -27,7 +27,7 @@ _(example above uses placeholder data - run the script to generate your own)_
 Run with your full profile URL (recommended - see the known issue below) or your HTB username:
 
 ```bash
-python htb_badge.py https://app.hackthebox.com/profile/123456
+python htb_badge.py https://app.hackthebox.com/public/users/123456
 # or
 python htb_badge.py fer
 ```
@@ -76,7 +76,7 @@ git push
 
 ## Known issue
 
-Username lookup (`python htb_badge.py fer`) currently fails with a `422` error from HTB's search endpoint - the exact parameters it expects haven't been confirmed yet. **Use your full profile URL instead** (`python htb_badge.py https://app.hackthebox.com/profile/<id>`), which doesn't depend on that endpoint at all and is confirmed working. Run with `--debug` if you want to help pin down the search endpoint's expected format - it now prints the response body on API errors.
+Username lookup (`python htb_badge.py fer`) currently fails with a `422` error from HTB's search endpoint - the exact parameters it expects haven't been confirmed yet. **Use your full profile URL instead** (`python htb_badge.py https://app.hackthebox.com/public/users/<id>`), which doesn't depend on that endpoint at all and is confirmed working. Run with `--debug` if you want to help pin down the search endpoint's expected format - it now prints the response body on API errors.
 
 ## Notes
 
