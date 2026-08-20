@@ -27,7 +27,6 @@ EXPERIENCE_API_BASE = "https://labs.hackthebox.com/api/experience/v1"
 SITE_BASE = "https://www.hackthebox.com"
 ROMAN_GRADE = {"1": "I", "2": "II", "3": "III"}
 PROFILE_URL_RE = re.compile(r"hackthebox\.(?:com|eu)/(?:profile|public/users|users)/(\d+)")
-CREDIT = "Made by fer"
 DEBUG_FILE = "debug_response.json"
 
 DEBUG = False
@@ -391,7 +390,6 @@ def build_svg(data, experience=None, avatar_data_uri=None):
   {stats}
 
   <text x="{CONTENT_X}" y="{CARD_HEIGHT - 16}" font-family="{FONT_STACK}" font-size="7" fill="#7d8590">hackthebox.com</text>
-  <text x="{CARD_WIDTH - 10}" y="{CARD_HEIGHT - 16}" text-anchor="end" font-family="{FONT_STACK}" font-size="8" font-weight="700" fill="#9FEF00">{escape(CREDIT)}</text>
 </svg>
 """
 
