@@ -284,7 +284,7 @@ def stat_column(x, icon_svg, value):
     return f"""
     <g>
       {icon_svg}
-      <text x="{x + 16}" y="{57}" font-family="{FONT_STACK}" font-size="12" font-weight="600" fill="#e6edf3">{escape(str(value))}</text>
+      <text x="{x + 16}" y="{49}" font-family="{FONT_STACK}" font-size="12" font-weight="600" fill="#e6edf3">{escape(str(value))}</text>
     </g>"""
 
 
@@ -330,8 +330,11 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     stats_parts = []
     x = CONTENT_X
     for icon_path, value, color, filled in columns:
-        stats_parts.append(stat_column(x, icon(icon_path, x, 45, size=13, color=color, filled=filled), value))
-        x += max(len(value) * 7, 10) + 25
+        # Icon vertically centered on the card's true midline (y=44, same
+        # as the avatar) rather than sitting low in the lower half - that
+        # mismatch with the avatar was the main "not lined up" issue.
+        stats_parts.append(stat_column(x, icon(icon_path, x, 38, size=13, color=color, filled=filled), value))
+        x += max(len(value) * 7, 12) + 32
     stats = "".join(stats_parts)
 
     avatar_svg = (
@@ -371,8 +374,8 @@ def build_svg(data, experience=None, avatar_data_uri=None):
 
   {stats}
 
-  <text x="{CONTENT_X}" y="{CARD_HEIGHT - 8}" font-family="{FONT_STACK}" font-size="7" fill="#7d8590">hackthebox.com</text>
-  <text x="{CARD_WIDTH - 10}" y="{CARD_HEIGHT - 8}" text-anchor="end" font-family="{FONT_STACK}" font-size="8" font-weight="700" fill="#9FEF00">{escape(CREDIT)}</text>
+  <text x="{CONTENT_X}" y="{CARD_HEIGHT - 16}" font-family="{FONT_STACK}" font-size="7" fill="#7d8590">hackthebox.com</text>
+  <text x="{CARD_WIDTH - 10}" y="{CARD_HEIGHT - 16}" text-anchor="end" font-family="{FONT_STACK}" font-size="8" font-weight="700" fill="#9FEF00">{escape(CREDIT)}</text>
 </svg>
 """
 
