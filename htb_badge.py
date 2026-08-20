@@ -247,10 +247,19 @@ ICON_COLOR_STREAK = "#719CF9"
 
 FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
+# Centered so the gap to the left card edge matches the gap to where the
+# header/stat text starts (CONTENT_X) - not simple geometric card-centering,
+# since CONTENT_X isn't itself centered on the card.
+AVATAR_CX = 37
+AVATAR_CY = 44
+AVATAR_R = 27
+AVATAR_BOX_X = AVATAR_CX - AVATAR_R  # top-left x of the avatar's square bounding box
+AVATAR_BOX_Y = AVATAR_CY - AVATAR_R  # top-left y of the avatar's square bounding box
+
 AVATAR_FALLBACK = (
-    '<rect x="5" y="17" width="54" height="54" fill="#2d3746" clip-path="url(#avatarClip)"/>'
-    '<circle cx="32" cy="32" r="11" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
-    '<circle cx="32" cy="66" r="20" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
+    f'<rect x="{AVATAR_BOX_X}" y="{AVATAR_BOX_Y}" width="54" height="54" fill="#2d3746" clip-path="url(#avatarClip)"/>'
+    f'<circle cx="{AVATAR_CX}" cy="{AVATAR_CY - 12}" r="11" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
+    f'<circle cx="{AVATAR_CX}" cy="{AVATAR_CY + 22}" r="20" fill="#6e7f96" clip-path="url(#avatarClip)"/>'
 )
 
 # Fixed to match the TryHackMe badge's own dimensions exactly (329x88px PNG,
@@ -302,6 +311,11 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     else:
         rank = str(data["rank"])
     rank = escape(truncate(rank, 14))
+    # Text is centered in the pill (text-anchor="middle"), so equal padding
+    # on both sides only requires this width estimate to be reasonably
+    # close, not exact - unlike left-aligned text where any overestimate
+    # shows up entirely as slack on the right.
+    pill_width = len(rank) * 4.6 + 16
 
     # A machine only counts as "pwned" once both flags are captured, so
     # this is min() rather than a sum of the two flag counts (confirmed
@@ -338,7 +352,7 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     stats = "".join(stats_parts)
 
     avatar_svg = (
-        f'<image href="{escape(avatar_data_uri)}" x="5" y="17" width="54" height="54" '
+        f'<image href="{escape(avatar_data_uri)}" x="{AVATAR_BOX_X}" y="{AVATAR_BOX_Y}" width="54" height="54" '
         f'clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>'
         if avatar_data_uri else AVATAR_FALLBACK
     )
@@ -354,20 +368,20 @@ def build_svg(data, experience=None, avatar_data_uri=None):
       <path d="M8 0 L16 4.7 L16 9.3 L8 14 L0 9.3 L0 4.7 Z" fill="none" stroke="#9FEF00" stroke-opacity="0.06" stroke-width="1"/>
     </pattern>
     <clipPath id="avatarClip">
-      <circle cx="32" cy="44" r="27"/>
+      <circle cx="{AVATAR_CX}" cy="{AVATAR_CY}" r="{AVATAR_R}"/>
     </clipPath>
   </defs>
 
   <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#bg)" stroke="#9FEF00" stroke-opacity="0.55" stroke-width="1.5"/>
   <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#hex)"/>
 
-  <circle cx="32" cy="44" r="28" fill="none" stroke="#9FEF00" stroke-width="1.5"/>
+  <circle cx="{AVATAR_CX}" cy="{AVATAR_CY}" r="{AVATAR_R + 1}" fill="none" stroke="#9FEF00" stroke-width="1.5"/>
   {avatar_svg}
 
   <text x="{CONTENT_X}" y="23" font-family="{FONT_STACK}" font-size="13" font-weight="700" fill="#e6edf3">{name}</text>
   <g transform="translate({CONTENT_X + len(name) * 7.2 + 8},11.1)">
-    <rect width="{len(rank) * 5.2 + 12}" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
-    <text x="6" y="9.1" font-family="{FONT_STACK}" font-size="8" font-weight="600" fill="#9FEF00">{rank}</text>
+    <rect width="{pill_width}" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
+    <text x="{pill_width / 2}" y="9.1" text-anchor="middle" font-family="{FONT_STACK}" font-size="8" font-weight="600" fill="#9FEF00">{rank}</text>
   </g>
 
   <line x1="{CONTENT_X}" y1="32" x2="{CARD_WIDTH - 12}" y2="32" stroke="#9FEF00" stroke-opacity="0.2" stroke-width="1"/>
