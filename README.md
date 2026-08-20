@@ -88,3 +88,7 @@ Username lookup (`python htb_badge.py fer`) currently fails with a `422` error f
 - The 4 stat icons are colored to match the TryHackMe badge's own icon colors exactly (sampled directly from the PNG with Pillow, not eyeballed) - silver/Level, green/Pwned, magenta/Rank, blue/Streak - and ordered the same way TryHackMe orders theirs (main stat, then streak, then the two secondary counters).
 - The card border and background hex pattern are intentionally very subtle (not fully removed) - TryHackMe's own badge has no colored border at all, just a dark gradient.
 - This uses HTB's undocumented v4 and experience APIs (reverse-engineered by the community and via browser DevTools), not an officially supported integration. If HTB changes their response format, the script prints a warning about which fields it couldn't find rather than failing silently.
+
+## License
+
+[MIT](LICENSE) - use it, fork it, change it, no warranty attached.
