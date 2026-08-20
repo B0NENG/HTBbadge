@@ -293,7 +293,7 @@ def stat_column(x, icon_svg, value):
     return f"""
     <g>
       {icon_svg}
-      <text x="{x + 16}" y="{49}" font-family="{FONT_STACK}" font-size="12" font-weight="600" fill="#e6edf3">{escape(str(value))}</text>
+      <text x="{x + 16}" y="{49}" font-family="{FONT_STACK}" font-size="12" font-weight="500" fill="#e6edf3">{escape(str(value))}</text>
     </g>"""
 
 
@@ -334,12 +334,14 @@ def build_svg(data, experience=None, avatar_data_uri=None):
     # No per-stat labels (POINTS/PWNED/...) - there's no room for them at
     # this fixed height, so this leans on icon+number pairs only, the same
     # way TryHackMe's own badge communicates its stats. Icon colors are
-    # sampled from that same THM badge (see ICON_COLOR_* above).
+    # sampled from that same THM badge (see ICON_COLOR_* above). Order
+    # mirrors THM's own layout too: main stat, then streak right next to
+    # it, then the two secondary counters.
     columns = [
         (ICON_LEVEL, truncate(level_display, 8), ICON_COLOR_LEVEL, False),
+        (ICON_FLAME, truncate(streak_display, 8), ICON_COLOR_STREAK, True),
         (ICON_FLAG, truncate(str(boxes_pwned), 8), ICON_COLOR_PWNED, False),
         (ICON_TREND, truncate(ranking_display, 8), ICON_COLOR_RANK, False),
-        (ICON_FLAME, truncate(streak_display, 8), ICON_COLOR_STREAK, True),
     ]
     stats_parts = []
     x = CONTENT_X
@@ -365,20 +367,20 @@ def build_svg(data, experience=None, avatar_data_uri=None):
       <stop offset="100%" stop-color="#141d2b"/>
     </linearGradient>
     <pattern id="hex" width="16" height="14" patternUnits="userSpaceOnUse" patternTransform="translate(0,0)">
-      <path d="M8 0 L16 4.7 L16 9.3 L8 14 L0 9.3 L0 4.7 Z" fill="none" stroke="#9FEF00" stroke-opacity="0.06" stroke-width="1"/>
+      <path d="M8 0 L16 4.7 L16 9.3 L8 14 L0 9.3 L0 4.7 Z" fill="none" stroke="#9FEF00" stroke-opacity="0.025" stroke-width="1"/>
     </pattern>
     <clipPath id="avatarClip">
       <circle cx="{AVATAR_CX}" cy="{AVATAR_CY}" r="{AVATAR_R}"/>
     </clipPath>
   </defs>
 
-  <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#bg)" stroke="#9FEF00" stroke-opacity="0.55" stroke-width="1.5"/>
+  <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#bg)" stroke="#9FEF00" stroke-opacity="0.15" stroke-width="1.5"/>
   <rect x="0.75" y="0.75" width="{CARD_WIDTH - 1.5}" height="{CARD_HEIGHT - 1.5}" rx="8" fill="url(#hex)"/>
 
   <circle cx="{AVATAR_CX}" cy="{AVATAR_CY}" r="{AVATAR_R + 1}" fill="none" stroke="#9FEF00" stroke-width="1.5"/>
   {avatar_svg}
 
-  <text x="{CONTENT_X}" y="23" font-family="{FONT_STACK}" font-size="13" font-weight="700" fill="#e6edf3">{name}</text>
+  <text x="{CONTENT_X}" y="23" font-family="{FONT_STACK}" font-size="13" font-weight="600" fill="#e6edf3">{name}</text>
   <g transform="translate({CONTENT_X + len(name) * 7.2 + 8},11.1)">
     <rect width="{pill_width}" height="14" rx="7" fill="#9FEF00" fill-opacity="0.12" stroke="#9FEF00" stroke-opacity="0.5"/>
     <text x="{pill_width / 2}" y="9.1" text-anchor="middle" font-family="{FONT_STACK}" font-size="8" font-weight="600" fill="#9FEF00">{rank}</text>

@@ -2,7 +2,7 @@
 
 _Made by fer_
 
-A [Hack The Box](https://www.hackthebox.com/) profile badge generator for your GitHub README, styled like the official TryHackMe badge: avatar, current level/tier, level number, boxes pwned, global ranking and weekly streak - as a clean SVG card in HTB's green/black look, fixed at **329x88px** to match TryHackMe's own badge size exactly.
+A [Hack The Box](https://www.hackthebox.com/) profile badge generator for your GitHub README, styled like the official TryHackMe badge: avatar, current level/tier, level number, weekly streak, boxes pwned and global ranking - as a clean SVG card in HTB's green/black look, fixed at **329x88px** to match TryHackMe's own badge size exactly.
 
 HTB doesn't offer an official stats badge anymore (the old `hackthebox.eu/badge/...` signature system is defunct), so this script builds one from the real HTB API instead.
 
@@ -85,5 +85,6 @@ Username lookup (`python htb_badge.py fer`) currently fails with a `422` error f
 - The **rank tag** (e.g. "Apprentice I"), the **Level** number, and the **Streak** stat all come from a separate HTB API - `labs.hackthebox.com/api/experience/v1/account/{account_id}` - not the same `/api/v4/...` endpoint everything else uses. This is HTB's current Level/Tier system. The older `/user/profile/basic` endpoint has its own `rank` field too (e.g. "Noob"), but that's a different, older ranking system (Noob -> Script Kiddie -> Hacker -> ... -> Omniscient) that can look stale by comparison - it's only used as a fallback if the experience API call fails.
 - A week counts toward the **Streak** (shown with a flame) once you've earned more than 200 XP in it; the current (incomplete) week isn't counted until it's over.
 - The card is a **fixed 329x88px**, matching TryHackMe's own badge size exactly, rather than growing with your content like earlier versions did. Very long names/tags get truncated with `…` instead of stretching the card - it won't overflow, but extreme cases (e.g. both a long custom name and a long rank tag) may look a bit cramped.
-- The 4 stat icons are colored to match the TryHackMe badge's own icon colors exactly (sampled directly from the PNG with Pillow, not eyeballed) - silver/Level, green/Pwned, magenta/Rank, blue/Streak - against HTB's usual green/black card.
+- The 4 stat icons are colored to match the TryHackMe badge's own icon colors exactly (sampled directly from the PNG with Pillow, not eyeballed) - silver/Level, green/Pwned, magenta/Rank, blue/Streak - and ordered the same way TryHackMe orders theirs (main stat, then streak, then the two secondary counters).
+- The card border and background hex pattern are intentionally very subtle (not fully removed) - TryHackMe's own badge has no colored border at all, just a dark gradient.
 - This uses HTB's undocumented v4 and experience APIs (reverse-engineered by the community and via browser DevTools), not an officially supported integration. If HTB changes their response format, the script prints a warning about which fields it couldn't find rather than failing silently.
